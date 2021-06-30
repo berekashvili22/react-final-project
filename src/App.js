@@ -1,41 +1,71 @@
-import { useState } from 'react';
-import React from 'react';
 import './App.css';
+import { useState, useEffect } from 'react';
+import Navigation from './components/navigation/navigation';
+import Home from './pages/home/home';
+import Dictionaries from './pages/dictionaries/dictionaries';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth, db } from './database/firebase';
+import Login from './pages/login/login';
+import Loading from './components/loading/loading';
+import TranslateProviderComponent from './providers/TranslateProvider';
+import Dictionary from './pages/dictionaries/dictionary';
 
 function App() {
-    const [data, setData] = useState([]);
+    const [user, loading] = useAuthState(auth);
+    const [dictionaryId, setDictionaryId] = useState(false);
+    const [page, setPage] = useState({
+        Dictionaries: false,
+        Dictionary: false,
+        Home: true
+    });
 
-    const getData = async () => {
-        let fromLang = 'en';
-        let toLang = 'no';
-        let text = 'something to translate';
+    useEffect(() => {
+        if (user) {
+            db.collection('users').doc(user.uid).set(
+                {
+                    email: user.email,
+                    photoUrl: user.photoURL
+                },
+                { merge: true }
+            );
+        }
+    }, [user]);
 
-        const API_KEY = ['AIzaSyCHfnN-dZkU_NjzI767Z1rgCev0coiUY90'];
+    if (loading) return <Loading />;
+    if (!user) return <Login />;
 
-        let url = `https://translation.googleapis.com/language/translate/v2?key=${API_KEY}`;
-        url += '&q=' + encodeURI(text);
-        url += `&source=${fromLang}`;
-        url += `&target=${toLang}`;
-
-        fetch(url, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json'
+    const onPageChange = (pageKey) => {
+        const updatePages = { ...page };
+        Object.keys(page).forEach((key) => {
+            if (key === pageKey) {
+                updatePages[pageKey] = true;
+            } else {
+                updatePages[key] = false;
             }
-        })
-            .then((res) => res.json())
-            .then((response) => {
-                console.log('response from google: ', response);
-            })
-            .catch((error) => {
-                console.log('There was an error with the translation request: ', error);
-            });
+        });
+        setPage(updatePages);
     };
 
-    console.log(getData());
+    const setSingleDict = (id) => {
+        console.log('hi');
+        setDictionaryId(id);
+        onPageChange('Dictionary');
+    };
 
-    return <h1>hi react</h1>;
+    return (
+        <TranslateProviderComponent>
+            <div className="">
+                <Navigation onPageChange={onPageChange} pages={page} user={user} />
+                <div className="container">
+                    {page.Home && <Home user={user} />}
+                    {page.Dictionaries && (
+                        <Dictionaries user={user} setSingleDict={setSingleDict} />
+                    )}
+                    {page.Dictionary && <Dictionary id={dictionaryId} />}
+                </div>
+            </div>
+        </TranslateProviderComponent>
+    );
 }
 
 export default App;
